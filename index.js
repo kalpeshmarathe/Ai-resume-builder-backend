@@ -1,6 +1,6 @@
 require('dotenv').config(); // Load environment variables from .env file
 const express = require("express");
-// const cors = require("cors");
+const cors = require("cors");
 const app = express();
 const port = 4000;
 const { v4: uuidv4 } = require('uuid');
@@ -9,7 +9,7 @@ const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-// app.use(cors());
+app.use(cors());
 
 app.get("/api", (req, res) => {
     res.json({
@@ -19,10 +19,15 @@ app.get("/api", (req, res) => {
 
 // Helper function to generate content using Google Generative AI
 async function generateContent(prompt) {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text();
+    try {
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        return response.text();
+    } catch (error) {
+        console.error('Error generating content:', error);
+        throw new Error('Failed to generate content');
+    }
 }
 
 // Function to generate resume content using prompts
@@ -60,55 +65,58 @@ async function run(fullName, currentPosition, currentLength, currentTechnologies
 }
 
 app.post("/resume/create", async (req, res) => {
-    const {
-        fullName,
-        currentPosition,
-        currentLength,
-        currentTechnologies,
-        github,
-        gmail,
-        portfolio,
-        linkedin,
-        mobileNumber,
-        workHistory,
-        educationHistory,
-        projectHistory
-    } = req.body;
+    try {
+        const {
+            fullName,
+            currentPosition,
+            currentLength,
+            currentTechnologies,
+            github,
+            gmail,
+            portfolio,
+            linkedin,
+            mobileNumber,
+            workHistory,
+            educationHistory,
+            projectHistory
+        } = req.body;
 
-    const workArray = JSON.parse(workHistory);
-    const educationArray = JSON.parse(educationHistory);
-    const projectArray = JSON.parse(projectHistory);
-    let database = [];
+        // Validate and parse input JSON data
+        const workArray = JSON.parse(workHistory);
+        const educationArray = JSON.parse(educationHistory);
+        const projectArray = JSON.parse(projectHistory);
 
-    const newEntry = {
-        id: uuidv4(),
-        fullName,
-        currentPosition,
-        currentLength,
-        currentTechnologies,
-        github,
-        gmail,
-        portfolio,
-        linkedin,
-        mobileNumber,
-        workHistory: workArray,
-        educationHistory: educationArray,
-        projectHistory: projectArray,
-    };
+        const newEntry = {
+            id: uuidv4(),
+            fullName,
+            currentPosition,
+            currentLength,
+            currentTechnologies,
+            github,
+            gmail,
+            portfolio,
+            linkedin,
+            mobileNumber,
+            workHistory: workArray,
+            educationHistory: educationArray,
+            projectHistory: projectArray,
+        };
 
-    database.push(newEntry);
+        // Generate content using Google Generative AI
+        const generatedContent = await run(fullName, currentPosition, currentLength, currentTechnologies, workArray, projectArray);
 
-    // Generate content using Google Generative AI
-    const generatedContent = await run(fullName, currentPosition, currentLength, currentTechnologies, workArray, projectArray);
+        // Log generated content
+        console.log(generatedContent);
 
-    // Log generated content
-    console.log(generatedContent);
-
-    res.json({
-        message: "Request Successful!!",
-        data: newEntry,
-        generatedContent
-    });
+        res.json({
+            message: "Request Successful!!",
+            data: newEntry,
+            generatedContent
+        });
+    } catch (error) {
+        console.error('Error processing request:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
 });
 
 app.listen(port, () => {

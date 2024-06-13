@@ -6,6 +6,12 @@ const port = 4000;
 const { v4: uuidv4 } = require('uuid');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+const { Sequelize } = require('sequelize');
+const FormData = require('./models/FormData');
+
+const sequelize = new Sequelize(process.env.DATABASE_URL, {
+  dialect: 'postgres',
+});
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -77,39 +83,42 @@ app.post("/resume/create", async (req, res) => {
     const workArray = JSON.parse(workHistory);
     const educationArray = JSON.parse(educationHistory);
     const projectArray = JSON.parse(projectHistory);
-    let database = [];
 
-    const newEntry = {
-        id: uuidv4(),
-        fullName,
-        currentPosition,
-        currentLength,
-        currentTechnologies,
-        github,
-        gmail,
-        portfolio,
-        linkedin,
-        mobileNumber,
-        workHistory: workArray,
-        educationHistory: educationArray,
-        projectHistory: projectArray,
-    };
+    try {
+        const newEntry = await FormData.create({
+            fullName,
+            currentPosition,
+            currentLength,
+            currentTechnologies,
+            github,
+            gmail,
+            portfolio,
+            linkedin,
+            mobileNumber,
+            workHistory: workArray,
+            educationHistory: educationArray,
+            projectHistory: projectArray,
+        });
 
-    database.push(newEntry);
+        // Generate content using Google Generative AI
+        const generatedContent = await run(fullName, currentPosition, currentLength, currentTechnologies, workArray, projectArray);
 
-    // Generate content using Google Generative AI
-    const generatedContent = await run(fullName, currentPosition, currentLength, currentTechnologies, workArray, projectArray);
+        // Log generated content
+        // console.log(generatedContent);
 
-    // Log generated content
-    console.log(generatedContent);
-
-    res.json({
-        message: "Request Successful!!",
-        data: newEntry,
-        generatedContent
-    });
+        res.json({
+            message: "Request Successful!!",
+            data: newEntry,
+            generatedContent
+        });
+    } catch (error) {
+        console.error("Error saving form data:", error);
+        res.status(500).json({ message: 'Error saving form data', error });
+    }
 });
 
-app.listen(port, () => {
-    console.log(`Server is listening on ${port}`);
+sequelize.sync().then(() => {
+    app.listen(port, () => {
+        console.log(`Server is listening on ${port}`);
+    });
 });
